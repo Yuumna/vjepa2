@@ -57,6 +57,24 @@ def init_data(
             drop_last=drop_last,
             subset_file=subset_file,
         )
+    
+    elif data.lower() == "bddbox100k":
+        from src.datasets.bdd100k_classes import make_bddboxdataset
+
+        dataset, data_loader, dist_sampler = make_bddboxdataset(
+            transform=transform,
+            batch_size=batch_size,
+            collator=collator,
+            pin_mem=pin_mem,
+            num_workers=num_workers,
+            world_size=world_size,
+            rank=rank,
+            root_path=root_path,
+            training=training,
+            drop_last=drop_last,
+            persistent_workers=persistent_workers,
+            subset_file=subset_file,
+        )
 
     elif data.lower() == "videodataset":
         from src.datasets.video_dataset import make_videodataset
