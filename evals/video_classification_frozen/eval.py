@@ -89,7 +89,7 @@ def main(args_eval, resume_preempt=False):
     duration = args_data.get("clip_duration", None)
     num_views_per_segment = args_data.get("num_views_per_segment", 1)
     normalization = args_data.get("normalization", None)
-
+    bddx = args_data.get("bddx", False)  # BDDX dataset has start and end times
     # -- OPTIMIZATION
     args_opt = args_exp.get("optimization")
     batch_size = args_opt.get("batch_size")
@@ -177,6 +177,7 @@ def main(args_eval, resume_preempt=False):
         training=True,
         num_workers=num_workers,
         normalization=normalization,
+        bddx=bddx,  # BDDX dataset has start and end times
     )
     val_loader, _ = make_dataloader(
         dataset_type=dataset_type,
@@ -194,6 +195,7 @@ def main(args_eval, resume_preempt=False):
         training=False,
         num_workers=num_workers,
         normalization=normalization,
+        bddx=bddx,  # BDDX dataset has start and end times
     )
     ipe = len(train_loader)
     logger.info(f"Dataloader created... iterations per epoch: {ipe}")
@@ -292,6 +294,9 @@ def run_one_epoch(
     data_loader,
     use_bfloat16,
 ):
+    # inspect memory usage
+    #print("Memory usage at start of epoch:")
+    #print(torch.cuda.memory_summary())
 
     for c in classifiers:
         c.train(mode=training)
@@ -321,6 +326,9 @@ def run_one_epoch(
             if training:
                 outputs = [[c(o) for o in outputs] for c in classifiers]
 
+        #inspect memory usage after forward pass
+        #print("Memory usage after forward pass:")
+        #print(torch.cuda.memory_summary())
         # Compute loss
         losses = [[criterion(o, labels) for o in coutputs] for coutputs in outputs]
         with torch.no_grad():
@@ -428,6 +436,7 @@ def make_dataloader(
     num_workers=12,
     subset_file=None,
     normalization=None,
+    bddx=False,  # BDDX dataset has start and end times
 ):
     if normalization is None:
         normalization = DEFAULT_NORMALIZATION
@@ -461,6 +470,7 @@ def make_dataloader(
         num_workers=num_workers,
         drop_last=False,
         subset_file=subset_file,
+        bddx=bddx,  # BDDX dataset has start and end times
     )
     return data_loader, data_sampler
 

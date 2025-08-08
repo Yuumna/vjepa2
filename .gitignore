@@ -30,3 +30,14 @@ app/vjepa_droid_v2/local/
 app/vjepa_droid_v3/local/
 app/vjepa_droid_v4/local/
 configs/local
+evals/video_classification_frozen/vitl-256/
+evals/image_classification_frozen/vitg-256/
+vjepa2_checkpoints/
+logs/
+
+*.mov
+*.png 
+*.json
+*.gif
+*.mp4
+
