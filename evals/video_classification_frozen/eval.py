@@ -33,6 +33,9 @@ from src.utils.checkpoint_loader import robust_checkpoint_loader
 from src.utils.distributed import AllReduce, init_distributed
 from src.utils.logging import AverageMeter, CSVLogger
 
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
+
+
 logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -89,6 +92,7 @@ def main(args_eval, resume_preempt=False):
     duration = args_data.get("clip_duration", None)
     num_views_per_segment = args_data.get("num_views_per_segment", 1)
     normalization = args_data.get("normalization", None)
+    random_clip_sampling = args_data.get("random_clip_sampling",False)
     bddx = args_data.get("bddx", False)  # BDDX dataset has start and end times
     # -- OPTIMIZATION
     args_opt = args_exp.get("optimization")
@@ -133,7 +137,7 @@ def main(args_eval, resume_preempt=False):
 
     # -- make csv_logger
     if rank == 0:
-        csv_logger = CSVLogger(log_file, ("%d", "epoch"), ("%.5f", "loss"), ("%.5f", "acc"))
+        csv_logger = CSVLogger(log_file, ("%d", "epoch"), ("%.5f", "loss"), ("%.5f", "acc"), ("%.5f", "f1_train"), ("%.5f", "f1_val"))
 
     # Initialize model
 
@@ -169,6 +173,7 @@ def main(args_eval, resume_preempt=False):
         frame_step=frame_step,
         eval_duration=duration,
         num_segments=num_segments,
+        random_clip_sampling=random_clip_sampling,
         num_views_per_segment=1,
         allow_segment_overlap=True,
         batch_size=batch_size,
@@ -186,6 +191,7 @@ def main(args_eval, resume_preempt=False):
         frames_per_clip=frames_per_clip,
         frame_step=frame_step,
         num_segments=num_segments,
+        random_clip_sampling=random_clip_sampling,
         eval_duration=duration,
         num_views_per_segment=num_views_per_segment,
         allow_segment_overlap=True,
@@ -246,7 +252,7 @@ def main(args_eval, resume_preempt=False):
         if val_only:
             train_acc = -1.0
         else:
-            train_acc = run_one_epoch(
+            train_acc,f1_score, cm = run_one_epoch(
                 device=device,
                 training=True,
                 encoder=encoder,
@@ -259,7 +265,7 @@ def main(args_eval, resume_preempt=False):
                 use_bfloat16=use_bfloat16,
             )
 
-        val_acc = run_one_epoch(
+        val_acc, f1_score_val, cm_val = run_one_epoch(
             device=device,
             training=False,
             encoder=encoder,
@@ -272,9 +278,9 @@ def main(args_eval, resume_preempt=False):
             use_bfloat16=use_bfloat16,
         )
 
-        logger.info("[%5d] train: %.3f%% test: %.3f%%" % (epoch + 1, train_acc, val_acc))
+        logger.info("[%5d] train: %.3f%% test: %.3f%% f1_train: %.3f%% f1_val: %.3f%% " % (epoch + 1, train_acc, val_acc, f1_score, f1_score_val))
         if rank == 0:
-            csv_logger.log(epoch + 1, train_acc, val_acc)
+            csv_logger.log(epoch + 1, train_acc, val_acc, f1_score, f1_score_val)
 
         if val_only:
             return
@@ -303,6 +309,9 @@ def run_one_epoch(
 
     criterion = torch.nn.CrossEntropyLoss()
     top1_meters = [AverageMeter() for _ in classifiers]
+    all_preds = [[] for _ in classifiers]
+    all_labels = []
+
     for itr, data in enumerate(data_loader):
         if training:
             [s.step() for s in scheduler]
@@ -325,18 +334,24 @@ def run_one_epoch(
                     outputs = [[c(o) for o in outputs] for c in classifiers]
             if training:
                 outputs = [[c(o) for o in outputs] for c in classifiers]
-
-        #inspect memory usage after forward pass
-        #print("Memory usage after forward pass:")
-        #print(torch.cuda.memory_summary())
+                
         # Compute loss
         losses = [[criterion(o, labels) for o in coutputs] for coutputs in outputs]
         with torch.no_grad():
             outputs = [sum([F.softmax(o, dim=1) for o in coutputs]) / len(coutputs) for coutputs in outputs]
             top1_accs = [100.0 * coutputs.max(dim=1).indices.eq(labels).sum() / batch_size for coutputs in outputs]
             top1_accs = [float(AllReduce.apply(t1a)) for t1a in top1_accs]
+
+            preds = [torch.argmax(out, dim=1).cpu().numpy() for out in outputs]
+            labels_np = labels.cpu().numpy()
+
+            for i, p in enumerate(preds):
+                all_preds[i].extend(p)
+            all_labels.extend(labels_np)
+
             for t1m, t1a in zip(top1_meters, top1_accs):
                 t1m.update(t1a)
+
 
         if training:
             if use_bfloat16:
@@ -347,6 +362,31 @@ def run_one_epoch(
                 [[lij.backward() for lij in li] for li in losses]
                 [o.step() for o in optimizer]
             [o.zero_grad() for o in optimizer]
+
+        
+            # ==== Compute metrics after full epoch ====
+        f1_macro_list = []
+        f1_weighted_list = []
+        f1_basic_list = []  # mean of per-class F1
+
+        for i in range(len(classifiers)):
+            y_true = np.array(all_labels)
+            y_pred = np.array(all_preds[i])
+
+            f1_b = f1_score(y_true, y_pred, average=None, zero_division=0)  # per class
+            f1_basic_list.append(np.mean(f1_b))  # average per class
+            f1_w = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+            f1_m = f1_score(y_true, y_pred, average='macro', zero_division=0)
+
+            f1_weighted_list.append(f1_w)
+            f1_macro_list.append(f1_m)
+
+        cm = confusion_matrix(y_true, y_pred)
+
+        # ==== Average across all classifiers ====
+        avg_f1_basic = float(np.mean(f1_basic_list))
+        avg_f1_weighted = float(np.mean(f1_weighted_list))
+        avg_f1_macro = float(np.mean(f1_macro_list))
 
         _agg_top1 = np.array([t1m.avg for t1m in top1_meters])
         if itr % 10 == 0:
@@ -360,8 +400,13 @@ def run_one_epoch(
                     torch.cuda.max_memory_allocated() / 1024.0**2,
                 )
             )
+            logger.info(f"Average across {len(classifiers)} classifiers:")
+            logger.info(f"Basic={avg_f1_basic:.3f}, Weighted F1={avg_f1_weighted:.3f}, Macro F1={avg_f1_macro:.3f}, CM={cm}")
 
-    return _agg_top1.max()
+
+
+
+    return _agg_top1.max(), avg_f1_basic, cm
 
 
 def load_checkpoint(device, r_path, classifiers, opt, scaler, val_only=False):
@@ -431,6 +476,7 @@ def make_dataloader(
     num_segments=8,
     eval_duration=None,
     num_views_per_segment=1,
+    random_clip_sampling= False,
     allow_segment_overlap=True,
     training=False,
     num_workers=12,
@@ -466,6 +512,7 @@ def make_dataloader(
         frame_sample_rate=frame_step,
         duration=eval_duration,
         num_clips=num_segments,
+        random_clip_sampling=random_clip_sampling,
         allow_clip_overlap=allow_segment_overlap,
         num_workers=num_workers,
         drop_last=False,

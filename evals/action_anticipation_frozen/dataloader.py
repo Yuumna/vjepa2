@@ -11,8 +11,8 @@ import torchvision.transforms as transforms
 
 import src.datasets.utils.video.transforms as video_transforms
 import src.datasets.utils.video.volume_transforms as volume_transforms
-from evals.action_anticipation_frozen.epickitchens import filter_annotations as ek100_filter_annotations
-from evals.action_anticipation_frozen.epickitchens import make_webvid as ek100_make_webvid
+from evals.action_anticipation_frozen.bddx import filter_annotations as ek100_filter_annotations
+from evals.action_anticipation_frozen.bddx import make_webvid as ek100_make_webvid
 from src.datasets.utils.video.randerase import RandomErasing
 
 _GLOBAL_SEED = 0
@@ -20,7 +20,6 @@ logger = getLogger()
 
 
 def init_data(
-    base_path,
     annotations_path,
     batch_size,
     dataset,
@@ -56,7 +55,7 @@ def init_data(
     )
 
     make_webvid = None
-    if "ek100" in dataset.lower():
+    if "ek100" in dataset.lower() or "bddx6" in dataset.lower():
         make_webvid = ek100_make_webvid
 
     dataset, data_loader, data_info = make_webvid(
@@ -64,7 +63,6 @@ def init_data(
         decode_one_clip=decode_one_clip,
         world_size=world_size,
         rank=rank,
-        base_path=base_path,
         annotations_path=annotations_path,
         batch_size=batch_size,
         transform=transform,
@@ -83,17 +81,15 @@ def init_data(
 
 def filter_annotations(
     dataset,
-    base_path,
     train_annotations_path,
     val_annotations_path,
     **kwargs,
 ):
     _filter = None
-    if "ek100" in dataset.lower():
+    if "ek100" in dataset.lower()  or "bddx6" in dataset.lower():
         _filter = ek100_filter_annotations
 
     return _filter(
-        base_path=base_path,
         train_annotations_path=train_annotations_path,
         val_annotations_path=val_annotations_path,
         **kwargs,

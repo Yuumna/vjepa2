@@ -370,7 +370,7 @@ class VideoDataset(torch.utils.data.Dataset):
                 # If partition_len > clip len, then sample a random window of
                 # clip_len frames within the segment
                 end_indx = clip_len + start_frame # + start_frame to include the start of the segment
-                if self.random_clip_sampling:
+                if self.random_clip_sampling: # try to turn it off 
                     end_indx = np.random.randint(clip_len + start_frame, partition_len + start_frame)
                 start_indx = end_indx - clip_len
                 indices = np.linspace(start_indx, end_indx, num=fpc)
