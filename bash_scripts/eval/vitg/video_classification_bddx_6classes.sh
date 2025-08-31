@@ -1,10 +1,10 @@
 #!/bin/bash
 
 #SBATCH --partition lmbdlc2_gpu-l40s   # short: -p <partition_name>
-#SBATCH --job-name train_probes_vid_class_f1      # short: -J <job name>
+#SBATCH --job-name probes_vid_class_vitg     # short: -J <job name>
 
-#SBATCH --output ./logs/%x-%A-%j.out   # STDOUT  %x and %A will be replaced by the job name and job id, respectively. short: -o logs/%x-%A-job_name.out
-#SBATCH --error ./logs/%x-%A-%j.err    # STDERR  short: -e logs/%x-%A-job_name.out
+#SBATCH --output ./logs_vitg/%x-%A-%j.out   # STDOUT  %x and %A will be replaced by the job name and job id, respectively. short: -o logs/%x-%A-job_name.out
+#SBATCH --error ./logs_vitg/%x-%A-%j.err    # STDERR  short: -e logs/%x-%A-job_name.out
 
 #GET two nodes
 # Define the amount of memory required per node
@@ -37,7 +37,7 @@ conda activate vjepa2
 # Running the job
 start=`date +%s`
 
-python -m evals.main --fname configs/eval/vitl/bddx_updated.yaml  --devices cuda:0
+python -m evals.main --fname configs/eval/vitg-384/bddx_updated.yaml  --devices cuda:0
 end=`date +%s`
 runtime=$((end-start))
 

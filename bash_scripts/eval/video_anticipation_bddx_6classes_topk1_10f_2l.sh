@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --partition lmbdlc2_gpu-l40s   # short: -p <partition_name>
-#SBATCH --job-name train_probes_vid_class_f1      # short: -J <job name>
+#SBATCH --partition lmbdlc2_gpu-l40s  # short: -p <partition_name>
+#SBATCH --job-name probes_vid_anti_k1_10f_2l     # short: -J <job name>
 
 #SBATCH --output ./logs/%x-%A-%j.out   # STDOUT  %x and %A will be replaced by the job name and job id, respectively. short: -o logs/%x-%A-job_name.out
 #SBATCH --error ./logs/%x-%A-%j.err    # STDERR  short: -e logs/%x-%A-job_name.out
@@ -14,7 +14,7 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=8
 #SBATCH --time=23:59:59
-
+#SBATCH --signal=TERM@300
 
 if [[ $(hostname) == "dlc2gpu03" || $(hostname) == "dlc2gpu05" ]] ; then
   export NCCL_P2P_DISABLE=1
@@ -37,7 +37,7 @@ conda activate vjepa2
 # Running the job
 start=`date +%s`
 
-python -m evals.main --fname configs/eval/vitl/bddx_updated.yaml  --devices cuda:0
+python -m evals.main --fname configs/eval/vitl/bddx_action_anticipation_topk1_10f_2l.yaml  --devices cuda:0
 end=`date +%s`
 runtime=$((end-start))
 
