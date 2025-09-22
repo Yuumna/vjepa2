@@ -14,6 +14,8 @@ import pandas as pd
 import torch
 import torchvision
 from decord import VideoReader, cpu
+from torch.utils.data import WeightedRandomSampler
+from collections import Counter
 
 from src.datasets.utils.dataloader import ConcatIndices, MonitoredDataset, NondeterministicDataLoader
 from src.datasets.utils.weighted_sampler import DistributedWeightedSampler
@@ -21,6 +23,14 @@ from src.datasets.utils.weighted_sampler import DistributedWeightedSampler
 _GLOBAL_SEED = 0
 logger = getLogger()
 
+def make_uniform_class_weights(dataset):
+    labels = dataset.labels
+    labels = np.asarray(labels)
+    counts = Counter(labels.tolist())
+    # weight of a class = 1 / freq(class)
+    class_w = {c: 1.0 / cnt for c, cnt in counts.items()}
+    sample_w = np.asarray([class_w[int(c)] for c in labels], dtype=np.float32)
+    return torch.as_tensor(sample_w)
 
 def make_videodataset(
     data_paths,
@@ -48,6 +58,7 @@ def make_videodataset(
     deterministic=True,
     log_dir=None,
     bddx=False,  # BDDX dataset has start and end times
+    training=True
 ):
     dataset = VideoDataset(
         data_paths=data_paths,
@@ -86,7 +97,11 @@ def make_videodataset(
         dist_sampler = torch.utils.data.distributed.DistributedSampler(
             dataset, num_replicas=world_size, rank=rank, shuffle=True
         )
+    if training:
+        weights = make_uniform_class_weights(dataset)
 
+        dist_sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
+        shuffle = False
     if deterministic:
         data_loader = torch.utils.data.DataLoader(
             dataset,

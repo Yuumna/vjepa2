@@ -387,10 +387,10 @@ def run_one_epoch(
             f1_weighted_list.append(f1_w)
             f1_macro_list.append(f1_m)
 
-        cm = confusion_matrix(y_true, y_pred)
+        #cm = confusion_matrix(y_true, y_pred)
 
         # ==== Average across all classifiers ====
-        avg_f1_basic = float(np.mean(f1_basic_list))
+        #avg_f1_basic = float(np.mean(f1_basic_list))
         avg_f1_weighted = float(np.mean(f1_weighted_list))
         avg_f1_macro = float(np.mean(f1_macro_list))
 
@@ -407,12 +407,17 @@ def run_one_epoch(
                 )
             )
             logger.info(f"Average across {len(classifiers)} classifiers:")
-            logger.info(f"Basic={avg_f1_basic:.3f}, Weighted F1={avg_f1_weighted:.3f}, Macro F1={avg_f1_macro:.3f}, CM={cm}")
+            logger.info(f"Weighted F1={avg_f1_weighted:.3f}, Macro F1={avg_f1_macro:.3f}, CM={cm}")
 
 
 
+    y_true = np.array(all_labels)
+    y_pred_final = np.array(all_preds[-1])  # best classifier
+    cm = confusion_matrix(y_true, y_pred_final)
+    report = classification_report(y_true, y_pred_final, zero_division=0)
+    logger.info(f"Final classification report for last classifier:\n{report}")
 
-    return _agg_top1.max(), avg_f1_basic, cm
+    return _agg_top1.max(), avg_f1_weighted, cm
 
 
 def load_checkpoint(device, r_path, classifiers, opt, scaler, val_only=False):
@@ -514,6 +519,7 @@ def make_dataloader(
 
     data_loader, data_sampler = init_data(
         data=dataset_type,
+        training=training,
         root_path=root_path,
         transform=transform,
         batch_size=batch_size,

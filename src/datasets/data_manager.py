@@ -105,6 +105,7 @@ def init_data(
             deterministic=deterministic,
             log_dir=log_dir,
             bddx=bddx,
+            training=training,
         )
 
     return (data_loader, dist_sampler)
