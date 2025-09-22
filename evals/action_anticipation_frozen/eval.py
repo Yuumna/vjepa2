@@ -78,12 +78,12 @@ def main(args_eval, resume_preempt=False):
     args_classifier = args_exp.get("classifier")
     num_probe_blocks = args_classifier.get("num_probe_blocks", 1)
     num_heads = args_classifier.get("num_heads")
+    topk = args_classifier.get("topk", 1)
 
     # -- DATA
     args_data = args_exp.get("data")
     dataset = args_data.get("dataset")  # Name of dataset (e.g., "EK100")
-    base_path = args_data.get("base_path")  # Root directory containing videos
-    file_format = args_data.get("file_format", 1)
+ 
     num_workers = args_data.get("num_workers", 12)
     pin_mem = args_data.get("pin_memory", True)
     # -- / frame sampling hyper-params
@@ -103,8 +103,7 @@ def main(args_eval, resume_preempt=False):
     # --
     train_annotations_path = args_data.get("dataset_train")
     val_annotations_path = args_data.get("dataset_val")
-    train_data_path = base_path  # os.path.join(base_path, "train")
-    val_data_path = base_path  # os.path.join(base_path, "test")
+
 
     # -- OPTIMIZATION
     args_opt = args_exp.get("optimization")
@@ -150,7 +149,7 @@ def main(args_eval, resume_preempt=False):
     log_file = os.path.join(folder, f"log_r{rank}.csv")
     latest_path = os.path.join(folder, "latest.pt")
 
-    action_is_verb_noun = True
+    action_is_verb_noun = False
     if dataset in ["COIN_anticipation"]:
         action_is_verb_noun = False
 
@@ -186,10 +185,9 @@ def main(args_eval, resume_preempt=False):
     # -- process annotations to unify action class labels between train/val
     _annotations = filter_annotations(
         dataset,
-        base_path,
         train_annotations_path,
         val_annotations_path,
-        file_format=file_format,
+      
     )
     action_classes = _annotations["actions"]
     verb_classes = {}
@@ -234,7 +232,6 @@ def main(args_eval, resume_preempt=False):
     train_set, train_loader, train_data_info = init_data(
         dataset=dataset,
         training=True,
-        base_path=train_data_path,
         annotations_path=train_annotations,
         batch_size=batch_size,
         frames_per_clip=frames_per_clip,
@@ -259,7 +256,6 @@ def main(args_eval, resume_preempt=False):
     _, val_loader, _ = init_data(
         dataset=dataset,
         training=False,
-        base_path=val_data_path,
         annotations_path=val_annotations,
         batch_size=batch_size,
         frames_per_clip=frames_per_clip,
@@ -341,6 +337,7 @@ def main(args_eval, resume_preempt=False):
                 noun_classes=noun_classes,
                 action_classes=action_classes,
                 criterion=criterion,
+                topk=topk,
             )
 
         # report val action anticipation (AA)
@@ -359,6 +356,7 @@ def main(args_eval, resume_preempt=False):
             noun_classes=noun_classes,
             action_classes=action_classes,
             criterion=criterion,
+            topk=topk,
         )
         if val_only:
             logger.info(
@@ -457,14 +455,15 @@ def train_one_epoch(
     verb_classes,
     action_classes,
     criterion,
+    topk,
 ):
     _data_loader = iter(data_loader)
     for c in classifiers:
         c.train(mode=True)
     if action_is_verb_noun:
-        verb_metric_loggers = [ClassMeanRecall(num_classes=len(verb_classes), device=device, k=5) for _ in classifiers]
-        noun_metric_loggers = [ClassMeanRecall(num_classes=len(noun_classes), device=device, k=5) for _ in classifiers]
-    action_metric_loggers = [ClassMeanRecall(num_classes=len(action_classes), device=device, k=5) for _ in classifiers]
+        verb_metric_loggers = [ClassMeanRecall(num_classes=len(verb_classes), device=device, k=topk) for _ in classifiers]
+        noun_metric_loggers = [ClassMeanRecall(num_classes=len(noun_classes), device=device, k=topk) for _ in classifiers]
+    action_metric_loggers = [ClassMeanRecall(num_classes=len(action_classes), device=device, k=topk) for _ in classifiers]
     data_elapsed_time_meter = AverageMeter()
 
     for itr in range(ipe):
@@ -498,7 +497,9 @@ def train_one_epoch(
                 action_labels = torch.tensor(action_labels).to(device).to(_verbs.dtype)
             else:
                 _actions = udata[1]
-                action_labels = [action_classes[str(int(a))] for a in _actions]
+                #print(_actions)
+                #print(action_classes)
+                action_labels = [action_classes[int(a)] for a in _actions]
                 action_labels = torch.tensor(action_labels).to(device).to(_actions.dtype)
 
             # --
@@ -609,15 +610,16 @@ def validate(
     verb_classes,
     action_classes,
     criterion,
+    topk,
 ):
     logger.info("Running val...")
     _data_loader = iter(data_loader)
     for c in classifiers:
         c.train(mode=False)
     if action_is_verb_noun:
-        verb_metric_loggers = [ClassMeanRecall(num_classes=len(verb_classes), device=device, k=5) for _ in classifiers]
-        noun_metric_loggers = [ClassMeanRecall(num_classes=len(noun_classes), device=device, k=5) for _ in classifiers]
-    action_metric_loggers = [ClassMeanRecall(num_classes=len(action_classes), device=device, k=5) for _ in classifiers]
+        verb_metric_loggers = [ClassMeanRecall(num_classes=len(verb_classes), device=device, k=topk) for _ in classifiers]
+        noun_metric_loggers = [ClassMeanRecall(num_classes=len(noun_classes), device=device, k=topk) for _ in classifiers]
+    action_metric_loggers = [ClassMeanRecall(num_classes=len(action_classes), device=device, k=topk) for _ in classifiers]
 
     for itr in range(ipe):
         try:
@@ -644,7 +646,7 @@ def validate(
                 action_labels = torch.tensor(action_labels).to(device).to(_verbs.dtype)
             else:
                 _actions = udata[1]
-                action_labels = [action_classes[str(int(a))] for a in _actions]
+                action_labels = [action_classes[int(a)] for a in _actions]
                 action_labels = torch.tensor(action_labels).to(device).to(_actions.dtype)
 
             # Forward and prediction
@@ -743,7 +745,7 @@ def load_checkpoint(device, r_path, classifiers, opt, scaler, val_only=False):
     [o.load_state_dict(c) for o, c in zip(opt, checkpoint["opt"])]
 
     if scaler is not None:
-        [s.load_state_dict(c) for s, c in zip(opt, checkpoint["scaler"])]
+        [s.load_state_dict(c) for s, c in zip(scaler, checkpoint["scaler"])]
     logger.info(f"loaded optimizers from epoch {epoch}")
 
     return classifiers, opt, scaler, epoch

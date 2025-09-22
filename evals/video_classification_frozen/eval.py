@@ -25,6 +25,9 @@ import torch.multiprocessing as mp
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel
 
+
+from torchvision import transforms
+
 from evals.video_classification_frozen.models import init_module
 from evals.video_classification_frozen.utils import make_transforms
 from src.datasets.data_manager import init_data
@@ -46,6 +49,9 @@ torch.manual_seed(_GLOBAL_SEED)
 torch.backends.cudnn.benchmark = True
 
 pp = pprint.PrettyPrinter(indent=4)
+import sys
+sys.path.append("..")
+from orbis.data.custom_multiframe import RandomShiftCrop
 
 
 def main(args_eval, resume_preempt=False):
@@ -489,17 +495,22 @@ def make_dataloader(
 
     # Make Video Transforms
     transform = make_transforms(
-        training=training,
-        num_views_per_clip=num_views_per_segment,
-        random_horizontal_flip=False,
-        random_resize_aspect_ratio=(0.75, 4 / 3),
-        random_resize_scale=(0.08, 1.0),
-        reprob=0.25,
-        auto_augment=True,
-        motion_shift=False,
-        crop_size=img_size,
-        normalize=normalization,
-    )
+            training=training,
+            num_views_per_clip=num_views_per_segment,
+            random_horizontal_flip=False,
+            random_resize_aspect_ratio=(0.75, 4 / 3),
+            random_resize_scale=(0.08, 1.0),
+            reprob=0.0,
+            auto_augment=False,
+            motion_shift=False,
+            crop_size=img_size,
+            normalize=normalization,
+        )
+    #custom_crop = RandomShiftCrop(size=256, max_shift_horizontal=60, max_shift_vertical=30)
+    #transform = transforms.Compose([transforms.Resize(min(256)),
+    #                            custom_crop,
+    #                            transforms.ToTensor(),
+    #                            ])
 
     data_loader, data_sampler = init_data(
         data=dataset_type,
