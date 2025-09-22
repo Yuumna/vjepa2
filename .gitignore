@@ -24,7 +24,18 @@ third_party/*
 
 evals/simu_env_planning/local/
 evals/simu_env_planning/docker2/
-evals/simu_env_planning/docker/
+evals/simu_env_planning/docker/vitl/
+evals/action_anticipation_frozen/vitl/
+evals/video_classification_frozen/bddx_train_classification_new_path.csv
+evals/video_classification_frozen/bddx_val_classification_new_path.csv
+evals/video_classification_frozen/vitg-384/
+logs_vitg/
+logs*
+evals/action_anticipation_frozen/bddx_train_anticipation.csv
+evals/action_anticipation_frozen/bddx_train_anticipation_new_path.csv
+evals/action_anticipation_frozen/bddx_val_anticipation.csv
+evals/action_anticipation_frozen/bddx_val_anticipation_new_path.csv
+evals/action_anticipation_frozen/epickitchens copy.py
 app/vjepa_droid/local/
 app/vjepa_droid_v2/local/
 app/vjepa_droid_v3/local/
