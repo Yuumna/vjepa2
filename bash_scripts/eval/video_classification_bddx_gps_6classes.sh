@@ -1,19 +1,20 @@
 #!/bin/bash
 
-#SBATCH --partition lmbdlc2_gpu-l40s  # short: -p <partition_name>
-#SBATCH --job-name probes_vid_anti_k1     # short: -J <job name>
+#SBATCH --partition tflmb_gpu-rtx4090    # short: -p <partition_name>
+#SBATCH --job-name bddx_gps_vjepa_w/o_aug     # short: -J <job name>
 
-#SBATCH --output ./logs_ac/%x-%A-%j.out   # STDOUT  %x and %A will be replaced by the job name and job id, respectively. short: -o logs/%x-%A-job_name.out
-#SBATCH --error ./logs_ac/%x-%A-%j.err    # STDERR  short: -e logs/%x-%A-job_name.out
+#SBATCH --output ./logs/%x-%A-%j.out   # STDOUT  %x and %A will be replaced by the job name and job id, respectively. short: -o logs/%x-%A-job_name.out
+#SBATCH --error ./logs/%x-%A-%j.err    # STDERR  short: -e logs/%x-%A-job_name.out
 
 #GET two nodes
 # Define the amount of memory required per node
 #SBATCH --nodes=1
 #SBATCH --mem=64GB
 #SBATCH --gres=gpu:1
+#SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=8
 #SBATCH --time=23:59:59
-#SBATCH --signal=TERM@300
+
 
 if [[ $(hostname) == "dlc2gpu03" || $(hostname) == "dlc2gpu05" ]] ; then
   export NCCL_P2P_DISABLE=1
@@ -36,7 +37,7 @@ conda activate vjepa2
 # Running the job
 start=`date +%s`
 
-python -m evals.main --fname configs/eval/vitl/bddx_action_anticipation_topk1.yaml  --devices cuda:0
+python -m evals.main --fname configs/eval/vitl/bddx_gps.yaml  --devices cuda:0
 end=`date +%s`
 runtime=$((end-start))
 

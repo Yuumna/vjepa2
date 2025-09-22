@@ -1,7 +1,7 @@
 nodes: 1
 tasks_per_node: 1
-cpus_per_task: 12
-tag: bddx-antici-vitl16-k1
+cpus_per_task: 8
+tag: bddx-antici-vitl16-k1_sec
 eval_name: action_anticipation_frozen
 folder: evals/action_anticipation_frozen/vitl/bddx_anticipation
 resume_checkpoint: true
